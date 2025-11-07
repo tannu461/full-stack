@@ -1,0 +1,67 @@
+# ========= React Project Setup =========
+# (Run these commands in terminal)
+
+npx create-react-app my-react-app
+cd my-react-app
+
+
+
+# ========= .dockerignore =========
+# Create a file named .dockerignore with the following:
+
+node_modules
+build
+.git
+.gitignore
+Dockerfile
+.dockerignore
+npm-debug.log
+
+
+
+# ========= Dockerfile =========
+# Create a file named Dockerfile with the following:
+
+##############################
+# Stage 1 — Build React App  #
+##############################
+FROM node:18-alpine AS build
+
+WORKDIR /app
+
+# Install dependencies
+COPY package*.json ./
+RUN npm install
+
+# Copy project
+COPY . .
+
+# Build production
+RUN npm run build
+
+
+##############################
+# Stage 2 — Serve with Nginx #
+##############################
+FROM nginx:alpine
+
+# Copy build files to nginx folder
+COPY --from=build /app/build /usr/share/nginx/html
+
+# Expose port
+EXPOSE 80
+
+# Start nginx
+CMD ["nginx", "-g", "daemon off;"]
+
+
+
+# ========= Build Image =========
+# Run this in terminal from project root:
+docker build -t react-nginx-app .
+
+# ========= Run Container =========
+docker run -p 3000:80 react-nginx-app
+
+# Open:
+# http://localhost:3000
