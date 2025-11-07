@@ -1,0 +1,221 @@
+# ========================================================
+# 1) PROJECT STRUCTURE
+# ========================================================
+
+fullstack-app/
+├── client/        # React frontend
+│   ├── src/
+│   ├── public/
+│   └── package.json
+├── server/        # Express backend
+│   ├── index.js
+│   └── package.json
+└── README.md
+
+
+# ========================================================
+# 2) SAMPLE BACKEND (server/index.js)
+# ========================================================
+# Simple Node.js + Express server
+
+const express = require("express");
+const cors = require("cors");
+const app = express();
+const PORT = process.env.PORT || 4000;
+
+app.use(cors());
+app.get("/api", (req, res) => {
+  res.json({ message: "Hello from AWS EC2 backend!" });
+});
+
+app.listen(PORT, () => console.log(`Backend running on port ${PORT}`));
+
+
+# ========================================================
+# 3) SAMPLE FRONTEND (client/src/App.js)
+# ========================================================
+import { useEffect, useState } from "react";
+
+function App() {
+  const [data, setData] = useState("");
+
+  useEffect(() => {
+    fetch("http://<BACKEND_DOMAIN_OR_LB_DNS>/api")
+      .then(res => res.json())
+      .then(x => setData(x.message))
+  }, []);
+
+  return <h1>{data}</h1>;
+}
+
+export default App;
+
+
+# ========================================================
+# 4) BUILD FRONTEND
+# ========================================================
+cd client
+npm install
+npm run build   # Produces /build static folder
+
+
+# ========================================================
+# 5) PREPARE BACKEND
+# ========================================================
+cd server
+npm install
+
+
+# ========================================================
+# 6) AWS DEPLOYMENT
+# ========================================================
+# (A) Create VPC — use defaults if new
+#     - 2 public subnets
+#     - Internet gateway attached
+#     - Default route to internet GW
+
+# (B) Create EC2 AMI:
+#     - Amazon Linux 2 or Ubuntu
+#     - Open inbound ports:
+#       - Port 80 for HTTP
+#       - Port 22 for SSH
+#       - Port 4000 for backend
+
+# (C) SSH into each instance:
+
+ssh -i keypair.pem ec2-user@PUBLIC_IP
+
+# Install Node for backend
+sudo yum update -y
+curl -sL https://rpm.nodesource.com/setup_18.x | sudo bash -
+sudo yum install -y nodejs git
+
+# Clone repo
+git clone https://github.com/your/repo.git
+cd fullstack-app/server
+npm install
+node index.js &     # Run backend
+
+# Verify backend works
+curl http://localhost:4000/api
+
+# Repeat this setup on multiple EC2 instances
+
+
+# ========================================================
+# 7) DEPLOY FRONTEND
+# ========================================================
+# Option A — Deploy React on separate EC2 instance with Nginx
+
+# Install Nginx
+sudo yum install -y nginx
+sudo systemctl start nginx
+sudo systemctl enable nginx
+
+# Copy React build
+cd fullstack-app/client/build
+sudo cp -r * /usr/share/nginx/html/
+
+# Update Nginx reverse proxy if needed
+
+
+# ========================================================
+# 8) SETUP APPLICATION LOAD BALANCER (ALB)
+# ========================================================
+# In AWS console:
+#   Go to EC2 > Load balancer > Create Load Balancer
+#   Choose: Application Load Balancer
+#     - Internet-facing
+#     - HTTP : 80
+#   Add two public subnets
+
+# Target group (HTTP:4000)
+#   Register backend EC2 instances
+#   Health check: /api
+#   Path: /api
+#   Protocol: HTTP
+#   Port: 4000
+
+# Attach target group to the ALB listener
+# Listener → Forward to backend target group
+
+# ALB will distribute /api calls to EC2 backend
+# Frontend will stay on frontend EC2:80 or CloudFront
+
+
+# ========================================================
+# 9) CONFIGURE ROUTE 53 (optional domain)
+# ========================================================
+# In Route 53:
+#   Add DNS A-Record → point to ALB DNS name
+#   Example:
+#   api.yourdomain.com → ALB DNS
+
+# Frontend can call: https://api.yourdomain.com/api
+
+
+# ========================================================
+# 10) SECURITY GROUPS
+# ========================================================
+# FRONTEND SG:
+#   Inbound: 80 (public), 22 (admin)
+
+# BACKEND SG:
+#   Inbound: 4000 from ALB SG only
+#   22 from admin
+
+# ALB SG:
+#   Inbound: 80 from anywhere
+#   Outbound: to backend SG on 4000
+
+
+# ========================================================
+# 11) TEST
+# ========================================================
+# Test ALB
+curl http://<ALB-DNS>/api
+
+# Open browser → React app
+http://<FRONTEND_EC2_PUBLIC_IP>
+
+# React fetches from:
+http://<ALB-DNS>/api
+
+
+# ========================================================
+# 12) SCALABILITY & FAULT TOLERANCE
+# ========================================================
+# Add 2+ backend EC2s → Register to target group
+
+# Auto Scaling (optional):
+#   - Create launch template
+#   - Auto scaling group
+#   - Attach to target group
+#   - Min = 2
+#   - Max = X
+
+# ALB distributes traffic → Achieves HA + scalability
+
+
+# ========================================================
+# 13) OPTIONAL — DATABASE (MongoDB)
+# ========================================================
+# Options:
+#   ✅ MongoDB Atlas (recommended)
+#   ✅ Install MongoDB on EC2
+#   ✅ AWS DocumentDB (Mongo-compatible)
+
+# Add DB URI in backend .env:
+MONGO_URI=mongodb+srv://...
+
+
+# ========================================================
+# 14) SUMMARY
+# ========================================================
+# ✅ Full-stack app deployed on AWS EC2
+# ✅ Backend scaled behind ALB
+# ✅ Frontend served from EC2 or Nginx
+# ✅ Optional domain via Route53
+# ✅ Optional MongoDB
+
+# ========================================================
