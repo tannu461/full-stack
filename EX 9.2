@@ -1,0 +1,79 @@
+# ============================================
+# File: .github/workflows/main.yml
+# ============================================
+
+name: CI/CD Pipeline
+
+# ✅ Trigger workflow on push to main branch
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      # ✅ Check out repository
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      # ✅ Set up Node.js
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "18"
+
+      # ✅ Install dependencies
+      - name: Install Dependencies
+        run: npm install
+
+      # ✅ Run tests
+      - name: Run Tests
+        run: npm test --if-present
+
+      # ✅ Build project
+      - name: Build Project
+        run: npm run build
+
+      # ✅ Upload build artifacts
+      - name: Upload Production Build
+        uses: actions/upload-artifact@v4
+        with:
+          name: production-build
+          path: build/
+
+  # =================================================
+  # ✅ Optional: Deploy to GitHub Pages
+  #     Uncomment if using GitHub Pages for deploy
+  # =================================================
+  deploy:
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # Download the build folder artifact
+      - name: Download build
+        uses: actions/download-artifact@v4
+        with:
+          name: production-build
+          path: build
+
+      # Deploy using GitHub Pages action
+      - name: Deploy to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./build
+
+# =================================================
+# ✅ Optional Notes
+# - For Netlify, use "netlify/actions"
+# - For AWS S3, use "aws-actions/s3-sync"
+# =================================================
